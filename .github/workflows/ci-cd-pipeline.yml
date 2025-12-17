@@ -9,8 +9,8 @@ on:
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-  BACKEND_IMAGE: abdulrehman1318/finallabexam-backend
-  FRONTEND_IMAGE: abdulrehman1318/finallabexam-frontend
+  BACKEND_IMAGE: abdulraheem02/finalexam-backend
+  FRONTEND_IMAGE: abdulraheem02/finalexam-frontend
 
 jobs:
   # ==================== STAGE 1: BUILD & TEST BACKEND ====================
