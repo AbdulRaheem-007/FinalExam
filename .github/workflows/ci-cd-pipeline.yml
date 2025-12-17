@@ -5,6 +5,8 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
+  # Trigger: Pipeline run with Docker Hub credentials configured
+
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
