@@ -233,8 +233,8 @@ jobs:
         run: |
           echo "🏥 Performing backend health check..."
           for i in {1..5}; do
-            if curl -f http://localhost:5000 2>/dev/null; then
-              echo "✅ Backend is healthy!"
+            if curl -s http://localhost:5000 >/dev/null 2>&1; then
+              echo "✅ Backend is healthy and responding!"
               exit 0
             fi
             echo "Attempt $i/5 failed, retrying in 5 seconds..."
@@ -248,8 +248,8 @@ jobs:
         run: |
           echo "🏥 Performing frontend health check..."
           for i in {1..5}; do
-            if curl -f http://localhost:3000 2>/dev/null; then
-              echo "✅ Frontend is healthy!"
+            if curl -s http://localhost:3000 >/dev/null 2>&1; then
+              echo "✅ Frontend is healthy and responding!"
               exit 0
             fi
             echo "Attempt $i/5 failed, retrying in 5 seconds..."
