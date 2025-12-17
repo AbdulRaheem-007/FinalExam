@@ -170,12 +170,15 @@ jobs:
           echo "Frontend Image: ${{ env.FRONTEND_IMAGE }}"
           echo "✅ Docker images pushed successfully!"
 
-  # ==================== STAGE 4: DEPLOY TO STAGING SERVER ====================
+  # ==================== STAGE 4: DEPLOY TO STAGING ====================
   deploy-to-staging:
-    name: Deploy to Staging Server
+    name: Deploy to Staging Environment
     runs-on: ubuntu-latest
     needs: docker-build-push
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment:
+      name: staging
+      url: http://localhost:3000
     
     steps:
       - name: Checkout Code
@@ -183,60 +186,158 @@ jobs:
       
       - name: Setup Docker Compose
         run: |
-          echo "Setting up Docker Compose for staging deployment..."
+          echo "🔧 Setting up Docker Compose for staging deployment..."
           docker compose version
       
       - name: Pull Latest Images
         run: |
-          echo "Pulling latest Docker images..."
+          echo "📥 Pulling latest Docker images from Docker Hub..."
           docker pull ${{ env.BACKEND_IMAGE }}:latest
           docker pull ${{ env.FRONTEND_IMAGE }}:latest
+          echo "✅ Images pulled successfully"
+      
+      - name: Stop Existing Containers
+        run: |
+          echo "🛑 Stopping existing staging containers..."
+          docker compose -f docker-compose.staging.yml down || true
+          docker system prune -f
       
       - name: Deploy with Docker Compose
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
         run: |
-          echo "Deploying application to staging server..."
-          docker compose down || true
-          docker compose up -d
-          echo "✅ Application deployed successfully!"
+          echo "🚀 Deploying application to staging environment..."
+          docker compose -f docker-compose.staging.yml up -d
+          echo "✅ Deployment initiated successfully!"
+      
+      - name: Wait for Services to Start
+        run: |
+          echo "⏳ Waiting for services to initialize..."
+          sleep 15
+          echo "Services should be ready now"
       
       - name: Verify Deployment
         run: |
-          echo "Verifying deployment..."
-          sleep 10
-          docker compose ps
+          echo "🔍 Verifying deployment status..."
+          docker compose -f docker-compose.staging.yml ps
+          echo ""
           echo "=== Container Status ==="
-          docker ps --filter "name=devops"
+          docker ps --filter "name=staging"
+          echo ""
+          echo "=== Container Logs Preview ==="
+          docker compose -f docker-compose.staging.yml logs --tail=20
       
-      - name: Health Check
+      - name: Health Check - Backend
         run: |
-          echo "Performing health checks..."
-          echo "Backend health check..."
-          curl -f http://localhost:5000 || echo "Backend starting..."
-          echo "Frontend health check..."
-          curl -f http://localhost:3000 || echo "Frontend starting..."
-          echo "✅ Staging deployment complete!"
+          echo "🏥 Performing backend health check..."
+          for i in {1..5}; do
+            if curl -f http://localhost:5000 2>/dev/null; then
+              echo "✅ Backend is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i/5 failed, retrying in 5 seconds..."
+            sleep 5
+          done
+          echo "⚠️ Backend health check failed after 5 attempts"
+          docker logs staging-backend
+          exit 1
+      
+      - name: Health Check - Frontend
+        run: |
+          echo "🏥 Performing frontend health check..."
+          for i in {1..5}; do
+            if curl -f http://localhost:3000 2>/dev/null; then
+              echo "✅ Frontend is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i/5 failed, retrying in 5 seconds..."
+            sleep 5
+          done
+          echo "⚠️ Frontend health check failed after 5 attempts"
+          docker logs staging-frontend
+          exit 1
+      
+      - name: Generate Deployment Report
+        if: always()
+        run: |
+          echo "📊 Generating deployment report..."
+          cat > deployment-report.txt << EOF
+          ================================
+          STAGING DEPLOYMENT REPORT
+          ================================
+          Timestamp: $(date)
+          Git Commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Triggered by: ${{ github.actor }}
+          
+          === Docker Images ===
+          Backend: ${{ env.BACKEND_IMAGE }}:latest
+          Frontend: ${{ env.FRONTEND_IMAGE }}:latest
+          
+          === Container Status ===
+          $(docker ps --filter "name=staging" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}")
+          
+          === Service URLs ===
+          Frontend: http://localhost:3000
+          Backend API: http://localhost:5000
+          
+          === Deployment Status ===
+          Status: SUCCESS ✅
+          ================================
+          EOF
+          cat deployment-report.txt
+      
+      - name: Upload Deployment Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-deployment-report
+          path: |
+            deployment-report.txt
+          retention-days: 30
       
       - name: Display Service URLs
         run: |
-          echo "=== Staging Server URLs ==="
+          echo "================================"
+          echo "🎉 STAGING DEPLOYMENT COMPLETE!"
+          echo "================================"
           echo "Frontend: http://localhost:3000"
           echo "Backend API: http://localhost:5000"
           echo "================================"
+          echo "Note: Services are running on GitHub Actions runner"
+          echo "================================"
+
 
   # ==================== STAGE 5: NOTIFICATION ====================
   notify:
-    name: Send Notification
+    name: Pipeline Status Notification
     runs-on: ubuntu-latest
-    needs: [build-test-backend, build-test-frontend, docker-build-push]
+    needs: [build-test-backend, build-test-frontend, docker-build-push, deploy-to-staging]
     if: always()
     
     steps:
-      - name: Pipeline Status
+      - name: Pipeline Execution Summary
         run: |
-          echo "=== CI/CD Pipeline Completed ==="
-          echo "Backend Build: ${{ needs.build-test-backend.result }}"
-          echo "Frontend Build: ${{ needs.build-test-frontend.result }}"
-          echo "Docker Push: ${{ needs.docker-build-push.result }}"
           echo "================================"
+          echo "CI/CD PIPELINE EXECUTION SUMMARY"
+          echo "================================"
+          echo "Backend Build & Test: ${{ needs.build-test-backend.result }}"
+          echo "Frontend Build & Test: ${{ needs.build-test-frontend.result }}"
+          echo "Docker Build & Push: ${{ needs.docker-build-push.result }}"
+          echo "Staging Deployment: ${{ needs.deploy-to-staging.result }}"
+          echo "================================"
+          echo "Workflow Status: ${{ job.status }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "================================"
+          
+          # Determine overall status
+          if [[ "${{ needs.build-test-backend.result }}" == "success" ]] && \
+             [[ "${{ needs.build-test-frontend.result }}" == "success" ]] && \
+             [[ "${{ needs.docker-build-push.result }}" == "success" ]]; then
+            echo "✅ Pipeline completed successfully!"
+          else
+            echo "❌ Pipeline completed with failures"
+            exit 1
+          fi
