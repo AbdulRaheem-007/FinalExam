@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   backend:
-    build: ./backendsample
+    image: abdulrehman1318/finallabexam-backend:latest
     container_name: devops-backend
     restart: always
     ports:
@@ -14,7 +14,7 @@ services:
       - devops-network
 
   frontend:
-    build: ./frontendsample
+    image: abdulrehman1318/finallabexam-frontend:latest
     container_name: devops-frontend
     restart: always
     ports:
