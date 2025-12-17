@@ -7,9 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
-    env_file:
-      - ./backendsample/.env
     environment:
+      MONGO_URI: ${MONGO_URI}
       PORT: 5000
       NODE_ENV: staging
     networks:
